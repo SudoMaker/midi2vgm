@@ -31,6 +31,7 @@ Usage:
       --out arg            Output file
 ```
 
+
 ## Build
 ### Requirements
 - C++14 compatible compiler
@@ -48,6 +49,9 @@ mkdir build; cd build
 cmake ..
 make
 ```
+
+## Notes
+The rendered VGM file is optimized for playing on real hardware (e.g. our [RetroWave OPL3 Express](https://shop.sudomaker.com/products/retrowave-opl3-express) or a SoundBlaster card) rather than an emulator. It's mostly about channel panning.
 
 ## License
 AGPLv3
