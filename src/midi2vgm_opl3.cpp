@@ -37,6 +37,8 @@
 
 #include <cinttypes>
 
+#include <libgen.h> // la flemme
+
 #include <cxxopts.hpp>
 
 #include <adlmidi.h>
@@ -48,6 +50,9 @@
 #if __BYTE_ORDER == __BIG_ENDIAN
 #error Big endian arch is unsupported for now
 #endif
+
+static std::string opt_input, opt_output;
+static int opt_bank = -1, opt_vol_model = -1;
 
 std::u16string utf8_to_utf16(std::string const& utf8) {
 	std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> cnv;
@@ -119,10 +124,15 @@ public:
 	}
 
 	void write_gd3() {
-		const char note[] = "Created with midi2vgm_opl3 - github.com/SudoMaker/midi2vgm";
-
-		if (gd3_info_.notes.empty())
+		if (gd3_info_.notes.empty()) {
+			assert(!opt_input.empty());
+			char note[256];
+			char *path = strdup(opt_input.c_str());
+			sprintf(note, "Created with midi2vgm_opl3 - github.com/SudoMaker/midi2vgm\n"
+				      "Filename: %s, Bank: %d, VolModel: %d\n", basename(path), opt_bank, opt_vol_model);
 			gd3_info_.notes = note;
+			free(path);
+		}
 
 		auto buf = gd3_info_.serialize();
 		dbuf_.insert(dbuf_.end(), buf.begin(), buf.end());
@@ -238,9 +248,7 @@ int main(int argc, char **argv) {
 
 	cxxopts::Options options("midi2vgm_opl3", "midi2vgm_opl3 - Convert MIDI files to OPL3 VGM files");
 
-	std::string opt_input, opt_output;
 	GD3Info gd3_info;
-	int opt_bank, opt_vol_model;
 
 	options.add_options("Main")
 		("h,help", "Show this help")
