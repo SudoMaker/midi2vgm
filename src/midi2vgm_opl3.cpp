@@ -30,6 +30,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <vector>
 #include <string>
 #include <codecvt>
@@ -271,12 +272,12 @@ int main(int argc, char **argv) {
 		("vgm-conv-by", "VGM Meta: Converted By", cxxopts::value<std::string>(gd3_info.converted_by))
 		("vgm-notes", "VGM Meta: Notes", cxxopts::value<std::string>(gd3_info.notes))
 		("i,in", "Input file", cxxopts::value<std::string>(opt_input))
-		("o,out", "Output file", cxxopts::value<std::string>(opt_output))
+		("o,out", "Output path", cxxopts::value<std::string>(opt_output))
 		;
 
 	options.parse_positional({"in", "out", "bank", "vol-model"});
 
-	options.positional_help("<-i,--in Input file> <-o,--out Output file> <-b,--bank OPL3 Bank> <-v,--vol-model Volume model>");
+	options.positional_help("<-i,--in Input file> <-o,--out Output path> <-b,--bank OPL3 Bank> <-v,--vol-model Volume model>");
 
 	try {
 
@@ -292,10 +293,23 @@ int main(int argc, char **argv) {
 			return 0;
 		}
 
-		if (cmd.count("help") || opt_input.empty() || opt_output.empty()) {
+		if (cmd.count("help") || !std::filesystem::is_regular_file(opt_input)) {
 			std::cout << options.help({"Main"});
 			return 0;
 		}
+
+		std::filesystem::path inputPath(opt_input);
+		std::filesystem::path outputPath(opt_output);
+
+		if (outputPath.empty()) {
+			outputPath = inputPath;
+			outputPath.replace_extension("vgm");
+		} else if (std::filesystem::is_directory(opt_output)) {
+			outputPath /= inputPath.stem();
+			outputPath.replace_extension("vgm");
+		}
+
+		opt_output = outputPath.native();
 
 		assert(opt_bank > 0 || opt_bank < g_embeddedBanksCount);
 		assert(opt_vol_model >= 0 || opt_vol_model < ADLMIDI_VolumeModel_Count);
@@ -347,6 +361,8 @@ int main(int argc, char **argv) {
 	adl_close(midi_player);
 
 	out_file.write(reinterpret_cast<const char *>(dbuf.data()), dbuf.size());
+
+	std::cerr << "File generated at " << opt_output << std::endl;
 
 	return 0;
 }
