@@ -46,9 +46,10 @@
 #include <adlmidi_opl3.hpp>
 #include <chips/opl_chip_base.h>
 
-
-#if __BYTE_ORDER == __BIG_ENDIAN
-#error Big endian arch is unsupported for now
+#ifndef __APPLE__
+	#if __BYTE_ORDER == __BIG_ENDIAN
+		#error Big endian arch is unsupported for now
+	#endif
 #endif
 
 static std::string opt_input, opt_output;
@@ -61,6 +62,21 @@ std::u16string utf8_to_utf16(std::string const& utf8) {
 		throw std::runtime_error("incomplete conversion");
 	return s;
 }
+
+std::vector<const char *> volModelDescs = {
+	"AUTO: Automatically chosen by the bank used",
+	"Generic: Linearized scaling model, most standard",
+	"NativeOPL3: Native OPL3's logarithmic volume scale",
+	"DMX: Logarithmic volume scale using volume map table. Used in DMX",
+	"APOGEE: Logarithmic volume scale, used in Apogee Sound System",
+	"9X: Approximated and shorted volume map table (SB16 driver). Similar to general, but has less granularity",
+	"DMX_Fixed: DMX model with a fixed bug of AM voices",
+	"APOGEE_Fixed: Apogee model with a fixed bug of AM voices",
+	"AIL: Audio Interface Library volume scaling model",
+	"9X_GENERIC_FM: Approximated and shorted volume map table (Generic FM driver). Similar to general, but has less granularity",
+	"HMI: HMI Sound Operating System volume scaling model",
+	"HMI_OLD: HMI Sound Operating System volume scaling model, older variant with bugs"
+};
 
 struct GD3Info {
 	std::string title_en, title;
@@ -128,8 +144,10 @@ public:
 			assert(!opt_input.empty());
 			char note[256];
 			char *path = strdup(opt_input.c_str());
-			sprintf(note, "Created with midi2vgm_opl3 - github.com/SudoMaker/midi2vgm\n"
-				      "Filename: %s, Bank: %d, VolModel: %d\n", basename(path), opt_bank, opt_vol_model);
+			auto &bank = g_embeddedBanks[opt_bank];
+			auto &volModel = volModelDescs[opt_vol_model];
+			snprintf(note, 256, "\r\nConverted with midi2vgm_opl3 - https://github.com/SudoMaker/midi2vgm\r\n"
+				      "- Filename: %s\r\n- Bank: %d - %s\r\n- VolModel: %d - %s\r\n", basename(path), opt_bank, bank.title, opt_vol_model, volModel);
 			gd3_info_.notes = note;
 			free(path);
 		}
@@ -223,23 +241,8 @@ static void ShowBanks() {
 static void ShowVolModels() {
 	puts("Available volume models:");
 
-	std::vector<const char *> descs = {
-		"AUTO: Automatically chosen by the bank used",
-		"Generic: Linearized scaling model, most standard",
-		"NativeOPL3: Native OPL3's logarithmic volume scale",
-		"DMX: Logarithmic volume scale using volume map table. Used in DMX",
-		"APOGEE: Logarithmic volume scale, used in Apogee Sound System",
-		"9X: Approximated and shorted volume map table (SB16 driver). Similar to general, but has less granularity",
-		"DMX_Fixed: DMX model with a fixed bug of AM voices",
-		"APOGEE_Fixed: Apogee model with a fixed bug of AM voices",
-		"AIL: Audio Interface Library volume scaling model",
-		"9X_GENERIC_FM: Approximated and shorted volume map table (Generic FM driver). Similar to general, but has less granularity",
-		"HMI: HMI Sound Operating System volume scaling model",
-		"HMI_OLD: HMI Sound Operating System volume scaling model, older variant with bugs"
-	};
-
-	for (size_t i=0; i<descs.size(); i++) {
-		auto &it = descs[i];
+	for (size_t i=0; i<volModelDescs.size(); i++) {
+		auto &it = volModelDescs[i];
 		printf("%zu - %s\n", i, it);
 	}
 }
@@ -254,8 +257,8 @@ int main(int argc, char **argv) {
 		("h,help", "Show this help")
 		("show-banks", "Show available banks (patch sets)")
 		("show-vol-models", "Show available volume models")
-		("bank", "Bank (patch set)", cxxopts::value<int>(opt_bank)->default_value("58"))
-		("vol-model", "Volume model", cxxopts::value<int>(opt_vol_model)->default_value("0"))
+		("b,bank", "Bank (patch set)", cxxopts::value<int>(opt_bank)->default_value("58"))
+		("v,vol-model", "Volume model", cxxopts::value<int>(opt_vol_model)->default_value("0"))
 		("vgm-title-en", "VGM Meta: Title EN", cxxopts::value<std::string>(gd3_info.title_en))
 		("vgm-title", "VGM Meta: Title", cxxopts::value<std::string>(gd3_info.title))
 		("vgm-album-en", "VGM Meta: Album EN", cxxopts::value<std::string>(gd3_info.album_en))
@@ -267,11 +270,16 @@ int main(int argc, char **argv) {
 		("vgm-date", "VGM Meta: Date", cxxopts::value<std::string>(gd3_info.date))
 		("vgm-conv-by", "VGM Meta: Converted By", cxxopts::value<std::string>(gd3_info.converted_by))
 		("vgm-notes", "VGM Meta: Notes", cxxopts::value<std::string>(gd3_info.notes))
-		("in", "Input file", cxxopts::value<std::string>(opt_input))
-		("out", "Output file", cxxopts::value<std::string>(opt_output))
+		("i,in", "Input file", cxxopts::value<std::string>(opt_input))
+		("o,out", "Output file", cxxopts::value<std::string>(opt_output))
 		;
 
+	options.parse_positional({"in", "out", "bank", "vol-model"});
+
+	options.positional_help("<-i,--in Input file> <-o,--out Output file> <-b,--bank OPL3 Bank> <-v,--vol-model Volume model>");
+
 	try {
+
 		auto cmd = options.parse(argc, argv);
 
 		if (cmd.count("show-banks")) {
